@@ -27,7 +27,7 @@ export default function Home() {
   }
 
   return (
-    <main className="relative min-h-screen" style={{ background: "#000" }}>
+    <main className="relative min-h-screen">
       {/* ─── Global shader — fixed, behind everything ─── */}
       <ShaderBackground />
 

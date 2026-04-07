@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useRef } from "react";
-import { cn } from "@/lib/utils";
 
 // Zoom factor for the visual pattern.
 const ZOOM_FACTOR = 0.3;
@@ -193,13 +192,22 @@ function createShaderProgram(
   if (!vertexShader) return null;
   gl.shaderSource(vertexShader, vsSource);
   gl.compileShader(vertexShader);
-  if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS)) return null;
+  if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS)) {
+    console.error("ShaderBackground vertex shader compile failed:", gl.getShaderInfoLog(vertexShader));
+    gl.deleteShader(vertexShader);
+    return null;
+  }
 
   const fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
   if (!fragmentShader) return null;
   gl.shaderSource(fragmentShader, fsSource);
   gl.compileShader(fragmentShader);
-  if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS)) return null;
+  if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS)) {
+    console.error("ShaderBackground fragment shader compile failed:", gl.getShaderInfoLog(fragmentShader));
+    gl.deleteShader(vertexShader);
+    gl.deleteShader(fragmentShader);
+    return null;
+  }
 
   const program = gl.createProgram();
   if (!program) return null;
@@ -207,7 +215,16 @@ function createShaderProgram(
   gl.attachShader(program, fragmentShader);
   gl.linkProgram(program);
 
-  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) return null;
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+    console.error("ShaderBackground program link failed:", gl.getProgramInfoLog(program));
+    gl.deleteShader(vertexShader);
+    gl.deleteShader(fragmentShader);
+    gl.deleteProgram(program);
+    return null;
+  }
+
+  gl.deleteShader(vertexShader);
+  gl.deleteShader(fragmentShader);
   return program;
 }
 
@@ -220,7 +237,11 @@ export default function ShaderBackground() {
 
     const fsSource = buildFragmentShader();
     const gl = canvas.getContext("webgl2", { alpha: true });
-    if (!gl) return;
+    if (!gl) {
+      console.error("ShaderBackground could not create a WebGL2 context.");
+      canvas.dataset.shaderStatus = "no-webgl2";
+      return;
+    }
 
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
@@ -230,7 +251,12 @@ export default function ShaderBackground() {
     canvas.height = window.innerHeight;
 
     const program = createShaderProgram(gl, vertexShaderSource, fsSource);
-    if (!program) return;
+    if (!program) {
+      canvas.dataset.shaderStatus = "compile-failed";
+      return;
+    }
+
+    canvas.dataset.shaderStatus = "ready";
     gl.useProgram(program);
 
     const quadVertices = new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]);
@@ -248,7 +274,7 @@ export default function ShaderBackground() {
     const uResolutionLoc = gl.getUniformLocation(program, "uResolution");
     const uTimeLoc = gl.getUniformLocation(program, "uTime");
 
-    let startTime = performance.now();
+    const startTime = performance.now();
 
     function render() {
       const elapsed = (performance.now() - startTime) * 0.001;
@@ -287,8 +313,15 @@ export default function ShaderBackground() {
   }, []);
 
   return (
-    <div className="fixed inset-0 w-full h-full z-0 pointer-events-none bg-blue-50">
-      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" style={{ background: "transparent", opacity: 0.8 }} />
+    <div className="fixed inset-0 z-0 h-full w-full pointer-events-none">
+      <canvas
+        ref={canvasRef}
+        className="absolute inset-0 h-full w-full"
+        style={{
+          background:
+            "radial-gradient(circle at 20% 20%, rgba(59,130,246,0.2), transparent 35%), linear-gradient(180deg, #dbeafe 0%, #eff6ff 45%, #ffffff 100%)",
+        }}
+      />
     </div>
   );
 }
